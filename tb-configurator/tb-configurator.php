@@ -3,7 +3,7 @@
  * Plugin Name: TB Configurator
  * Plugin URI:  https://github.com/LikeMike151/test
  * Description: Batterij-configurator met visuele WooCommerce variatie-selector en besparingsberekening. Shortcodes: [tb_battery_configurator], [tb_product_configurator id="X"]
- * Version:     2.1.0
+ * Version:     2.2.0
  * Author:      Thuisbatterij.nl
  * Text Domain: tb-configurator
  * Requires Plugins: woocommerce
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '2.1.0' );
+define( 'TB_CFG_VERSION', '2.2.0' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -153,8 +153,8 @@ function tb_cfg_mark_product_page() {
 	} );
 }
 
-// Inklapbare calculator onder het product (na de afbeeldingen, vóór tabs)
-add_action( 'woocommerce_after_single_product_summary', 'tb_cfg_product_page_calculator', 5 );
+// Calculator in de rechterkolom van het product, direct ná de bestelknop (prioriteit 35 = na add-to-cart op 30)
+add_action( 'woocommerce_single_product_summary', 'tb_cfg_product_page_calculator', 35 );
 function tb_cfg_product_page_calculator() {
 	if ( ! is_product() ) {
 		return;

@@ -83,33 +83,35 @@
 
 .tb-btn-group {
 	display: flex !important;
-	flex-wrap: wrap !important;
+	flex-direction: column !important;   /* stapel verticaal = gelijke breedte */
 	gap: 8px !important;
 	margin-top: 6px !important;
+	width: 100% !important;
 }
 
 /* Hoge specificiteit + !important om theme-stijlen te overwinnen */
 body .tb-btn-group .tb-opt-btn,
 body .tb-variation-selector .tb-opt-btn,
 body .tb-card-variations .tb-opt-btn {
-	display: inline-block !important;
-	padding: 9px 14px !important;
+	display: block !important;       /* volledige breedte per knop */
+	width: 100% !important;          /* alle knoppen even breed */
+	padding: 11px 16px !important;
 	border: 2px solid rgba(0,0,0,0.12) !important;
 	border-radius: 10px !important;
 	background: #ffffff !important;
 	color: #0b0d12 !important;
 	font-size: 14px !important;
 	font-weight: 600 !important;
-	line-height: 1.3 !important;
+	line-height: 1.4 !important;
 	cursor: pointer !important;
 	white-space: normal !important;
 	word-break: break-word !important;
-	text-align: center !important;
+	text-align: left !important;
 	text-decoration: none !important;
 	box-shadow: none !important;
 	transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease !important;
-	min-width: 0 !important;
 	margin: 0 !important;
+	box-sizing: border-box !important;
 }
 
 body .tb-btn-group .tb-opt-btn:hover,
@@ -957,5 +959,58 @@ body .tb-variation-selector .tb-opt-btn.tb-unavailable {
 
 @media (max-width: 400px) {
 	.tb-kpi-val { font-size: 18px; }
-	.tb-opt-btn { padding: 8px 12px; font-size: 13px; }
+}
+
+/* ============================================================
+   5. STICKY PRODUCTAFBEELDING — volgt mee met de configurator
+   ============================================================ */
+
+/*
+ * Zet de WooCommerce productgalerij op sticky zodat de foto
+ * op zijn plek blijft terwijl de gebruiker door de opties scrolt.
+ * align-self: start is verplicht — zonder dit werkt sticky niet
+ * in een flex- of grid-container.
+ */
+@media (min-width: 768px) {
+	.tb-product-page .woocommerce-product-gallery,
+	.tb-product-page div.product .woocommerce-product-gallery {
+		position: sticky !important;
+		top: 24px !important;
+		align-self: start !important;
+	}
+
+	/* Zorg dat het product-wrapper grid/flex een stretching parent is */
+	.tb-product-page div.product {
+		align-items: start !important;
+	}
+}
+
+/* ============================================================
+   6. WC VARIATIES TABEL — opruimen en consistent maken
+   ============================================================ */
+
+/* Maximale breedte voor de knoppenkolom in de variatie-tabel */
+.tb-product-page .variations_form .variations td.value {
+	width: 100% !important;
+	max-width: 420px !important;
+}
+
+/* Attribuutlabel links: netjes uitlijnen */
+.tb-product-page .variations_form .variations th.label {
+	width: 140px !important;
+	min-width: 120px !important;
+	vertical-align: top !important;
+	padding-top: 12px !important;
+	font-weight: 700 !important;
+	font-size: 14px !important;
+	color: #566074 !important;
+}
+
+/* Rij-afstand tussen attributen */
+.tb-product-page .variations_form .variations tr {
+	border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+}
+
+.tb-product-page .variations_form .variations tr:last-child {
+	border-bottom: none !important;
 }
