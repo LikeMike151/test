@@ -11,7 +11,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '2.0.0' );
+define( 'TB_CFG_VERSION', '2.1.0' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -101,13 +101,22 @@ function tb_cfg_variation_dropdown_html( $html, $args ) {
 	// Knoppengroep
 	$buttons = '<div class="tb-btn-group" data-attr="' . esc_attr( $name ) . '">';
 	foreach ( $args['options'] as $option ) {
-		$active  = $selected === $option ? ' tb-active' : '';
+		// Converteer taxonomie-slug naar echte weergavenaam
+		$label_text = $option;
+		if ( taxonomy_exists( $attribute ) ) {
+			$term = get_term_by( 'slug', $option, $attribute );
+			if ( $term && ! is_wp_error( $term ) ) {
+				$label_text = $term->name;
+			}
+		}
+
+		$active   = $selected === $option ? ' tb-active' : '';
 		$buttons .= sprintf(
 			'<button type="button" class="tb-opt-btn%s" data-value="%s" data-select-id="%s">%s</button>',
 			$active,
 			esc_attr( $option ),
 			esc_attr( $id ),
-			esc_html( $option )
+			esc_html( $label_text )
 		);
 	}
 	$buttons .= '</div>';
@@ -115,15 +124,33 @@ function tb_cfg_variation_dropdown_html( $html, $args ) {
 	return $orig . $buttons;
 }
 
-// Voeg "woocommerce_single_add_to_cart_button" klasse toe aan WC knop
-add_filter( 'woocommerce_product_single_add_to_cart_text', '__return_null' );
+// Body-class zodat CSS productpagina-specifieke stijlen kan toepassen
 add_action( 'woocommerce_before_single_product', 'tb_cfg_mark_product_page' );
 function tb_cfg_mark_product_page() {
-	// Zorgt dat JS weet dat we op een productpagina zijn
 	add_filter( 'body_class', function( $classes ) {
 		$classes[] = 'tb-product-page';
 		return $classes;
 	} );
+}
+
+// Inklapbare calculator onder het product (na de afbeeldingen, vóór tabs)
+add_action( 'woocommerce_after_single_product_summary', 'tb_cfg_product_page_calculator', 5 );
+function tb_cfg_product_page_calculator() {
+	if ( ! is_product() ) {
+		return;
+	}
+	?>
+	<div class="tb-product-calc-section">
+		<button type="button" class="tb-product-calc-toggle" id="tbProductCalcToggle" aria-expanded="false">
+			<span class="tb-toggle-icon">🔋</span>
+			<?php esc_html_e( 'Bereken jouw besparing', 'tb-configurator' ); ?>
+			<span class="tb-toggle-arrow" aria-hidden="true">▾</span>
+		</button>
+		<div class="tb-product-calc-body" id="tbProductCalcBody" style="display:none">
+			<?php tb_cfg_render_calculator(); ?>
+		</div>
+	</div>
+	<?php
 }
 
 // ============================================================

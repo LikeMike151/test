@@ -9,7 +9,25 @@
 		initWcProductPage();
 		initProductShortcodes();
 		initFullConfigurator();
+		initProductPageCalcToggle();
 	});
+
+	// ============================================================
+	// INKLAPBARE CALCULATOR OP PRODUCTPAGINA
+	// ============================================================
+
+	function initProductPageCalcToggle() {
+		var $toggle = $('#tbProductCalcToggle');
+		var $body   = $('#tbProductCalcBody');
+		if (!$toggle.length) return;
+
+		$toggle.on('click', function () {
+			var isOpen = $body.is(':visible');
+			$body.slideToggle(250);
+			$toggle.toggleClass('tb-calc-open', !isOpen);
+			$toggle.attr('aria-expanded', String(!isOpen));
+		});
+	}
 
 	// ============================================================
 	// 1. WC PRODUCTPAGINA — verbeterde variatie-UI
