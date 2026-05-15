@@ -1,12 +1,15 @@
 <?php
 /**
  * Plugin Name: TB Configurator
- * Plugin URI:  https://thuisbatterij.nl
+ * Plugin URI:  https://github.com/LikeMike151/test
  * Description: Batterij-configurator met visuele WooCommerce variatie-selector en besparingsberekening. Shortcodes: [tb_battery_configurator], [tb_product_configurator id="X"]
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      Thuisbatterij.nl
  * Text Domain: tb-configurator
  * Requires Plugins: woocommerce
+ * GitHub Plugin URI: LikeMike151/test
+ * Primary Branch:    main
+ * Release Asset:     true
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -14,6 +17,23 @@ defined( 'ABSPATH' ) || exit;
 define( 'TB_CFG_VERSION', '2.1.0' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
+
+// ============================================================
+// AUTO-UPDATES via Plugin Update Checker v5 (GitHub Releases)
+// ============================================================
+
+require_once TB_CFG_PATH . 'vendor/plugin-update-checker/plugin-update-checker.php';
+
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+$tb_cfg_updater = PucFactory::buildUpdateChecker(
+	'https://github.com/LikeMike151/test/',
+	__FILE__,
+	'tb-configurator'
+);
+
+// Updates komen uit GitHub Releases; de zip is het release-asset
+$tb_cfg_updater->getVcsApi()->enableReleaseAssets();
 
 // ============================================================
 // ASSETS
