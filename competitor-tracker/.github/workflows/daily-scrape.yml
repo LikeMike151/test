@@ -1,0 +1,27 @@
+name: Daily Competitor Scrape
+
+on:
+  schedule:
+    # Run at 11 PM UTC (23:00)
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run daily scrape
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          curl -X POST "${{ secrets.APP_URL }}/api/scrape" \
+            -H "Authorization: Bearer ${{ secrets.API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+      - name: Log scrape result
+        if: always()
+        run: echo "Daily scrape completed"
