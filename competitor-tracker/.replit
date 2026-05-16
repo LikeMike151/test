@@ -1,0 +1,15 @@
+run = "python competitor_tracker.py"
+language = "python3"
+
+[packager]
+language = "python3"
+ignoredPaths = [".git", "data", "__pycache__"]
+
+[packager.features]
+guessImports = true
+
+[env]
+PYTHONUNBUFFERED = "1"
+
+[nix]
+channel = "stable-23_11"
