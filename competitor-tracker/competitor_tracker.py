@@ -6,6 +6,11 @@ import time
 from pathlib import Path
 from bs4 import BeautifulSoup
 import schedule
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
 
 # Configuration
 COMPETITORS = [
@@ -45,16 +50,26 @@ OWN_STORES = [
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
-client = anthropic.Anthropic()
+# Ensure API key is loaded
+api_key = os.getenv("ANTHROPIC_API_KEY")
+if not api_key:
+    raise ValueError("ANTHROPIC_API_KEY not found in .env file")
+
+client = anthropic.Anthropic(api_key=api_key)
 
 
 def scrape_website(url: str) -> list[dict]:
     """Scrape basic product info from a website"""
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.content, "html.parser")
@@ -91,7 +106,7 @@ Website text: {content[0]['text']}
 Return as JSON with keys: products (list of {{name, price}}), avg_price (number), summary (string)"""
 
         message = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-opus-4-1-20250805",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -183,7 +198,7 @@ Write a 2-3 sentence business summary focusing on:
 - Key competitive threats"""
 
         message = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-opus-4-1-20250805",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -266,6 +281,57 @@ def run_daily_check():
     print("=" * 60 + "\n")
 
     return output_data
+
+
+def generate_changes_html(changes: list) -> str:
+    """Generate HTML for price changes"""
+    if not changes:
+        return ""
+
+    change_items = []
+    for c in changes:
+        direction = 'change-up' if c['change_percent'] > 0 else 'change-down'
+        sign = '+' if c['change_percent'] > 0 else ''
+        item = f"""<div class="change-item">
+                <strong>{c['competitor']}</strong>: €{c['old_price']:.0f} → €{c['new_price']:.0f}
+                <span class="{direction}">
+                    {sign}{c['change_percent']:.1f}%
+                </span>
+            </div>"""
+        change_items.append(item)
+
+    return f"""<div class="section">
+            <h2>⚠️ Prijsveranderingen ({len(changes)})</h2>
+            {''.join(change_items)}
+        </div>"""
+
+
+def generate_own_stores_rows(own_stores: list) -> str:
+    """Generate HTML table rows for own stores"""
+    rows = []
+    for c in own_stores:
+        row = f"""<tr>
+                        <td><strong>{c['name']}</strong></td>
+                        <td class="price">€{c.get('avg_price', 0):.2f}</td>
+                        <td>{len(c.get('products', []))}</td>
+                        <td><span class="badge badge-own">Eigen</span></td>
+                    </tr>"""
+        rows.append(row)
+    return ''.join(rows)
+
+
+def generate_competitors_rows(competitors_only: list) -> str:
+    """Generate HTML table rows for competitors"""
+    rows = []
+    for c in competitors_only:
+        row = f"""<tr>
+                        <td><strong>{c['name']}</strong></td>
+                        <td class="price">€{c.get('avg_price', 0):.2f}</td>
+                        <td>{len(c.get('products', []))}</td>
+                        <td><a href="{c['url']}" target="_blank">Bezoeken →</a></td>
+                    </tr>"""
+        rows.append(row)
+    return ''.join(rows)
 
 
 def generate_dashboard(data: dict):
@@ -469,15 +535,7 @@ def generate_dashboard(data: dict):
             </div>
         </div>
 
-        {f'''<div class="section">
-            <h2>⚠️ Prijsveranderingen ({len(changes)})</h2>
-            {''.join(f'''<div class="change-item">
-                <strong>{c['competitor']}</strong>: €{c['old_price']:.0f} → €{c['new_price']:.0f}
-                <span class="{'change-up' if c['change_percent'] > 0 else 'change-down'}">
-                    {'+' if c['change_percent'] > 0 else ''}{c['change_percent']:.1f}%
-                </span>
-            </div>''' for c in changes)}
-        </div>''' if changes else ''}
+        {generate_changes_html(changes)}
 
         <div class="section">
             <h2>🏪 Eigen winkels</h2>
@@ -491,12 +549,7 @@ def generate_dashboard(data: dict):
                     </tr>
                 </thead>
                 <tbody>
-                    {''.join(f'''<tr>
-                        <td><strong>{c['name']}</strong></td>
-                        <td class="price">€{c.get('avg_price', 0):.2f}</td>
-                        <td>{len(c.get('products', []))}</td>
-                        <td><span class="badge badge-own">Eigen</span></td>
-                    </tr>''' for c in own_stores)}
+                    {generate_own_stores_rows(own_stores)}
                 </tbody>
             </table>
         </div>
@@ -513,12 +566,7 @@ def generate_dashboard(data: dict):
                     </tr>
                 </thead>
                 <tbody>
-                    {''.join(f'''<tr>
-                        <td><strong>{c['name']}</strong></td>
-                        <td class="price">€{c.get('avg_price', 0):.2f}</td>
-                        <td>{len(c.get('products', []))}</td>
-                        <td><a href="{c['url']}" target="_blank">Bezoeken →</a></td>
-                    </tr>''' for c in competitors_only)}
+                    {generate_competitors_rows(competitors_only)}
                 </tbody>
             </table>
         </div>

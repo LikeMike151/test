@@ -1,0 +1,372 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competitor Tracker Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .meta {
+            color: #666;
+            font-size: 14px;
+        }
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+        .summary h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .summary p {
+            color: #555;
+            line-height: 1.6;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .section {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: #f5f5f5;
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #ddd;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        tr:hover {
+            background: #f9f9f9;
+        }
+        .price {
+            font-weight: bold;
+            color: #667eea;
+        }
+        .change-up {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .change-down {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-own {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+        .badge-competitor {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+        .change-item {
+            background: #f9f9f9;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #f39c12;
+        }
+        .change-item strong {
+            color: #333;
+        }
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Competitor Tracker</h1>
+            <div class="meta">
+                Laatste update: 16 May 2026 om 08:41 ⚡
+            </div>
+        </header>
+
+        <div class="summary">
+            <h2>📊 Samenvatting</h2>
+            <p>Based on the provided data, **no meaningful competitive analysis can be performed** as all five home battery competitors (Marstek, Thuisbatterij.io, Thuisaccu, Baccu, and UW Solar Installatie Shop) show zero pricing data due to website scraping failures. Without access to actual product pricing, capacity specifications, or market positioning information, it's impossible to identify price trends, competitive positioning, or market threats. **A new data collection approach is needed** to properly assess the competitive landscape in the home battery market.</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Concurrenten</div>
+                <div class="stat-value">26</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Eigen winkels</div>
+                <div class="stat-value">2</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Prijsveranderingen</div>
+                <div class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Gem. prijs</div>
+                <div class="stat-value">€0</div>
+            </div>
+        </div>
+
+        
+
+        <div class="section">
+            <h2>🏪 Eigen winkels</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Winkel</th>
+                        <th>Gem. prijs</th>
+                        <th>Producten</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Thuisbatterij.nl</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><span class="badge badge-own">Eigen</span></td>
+                    </tr><tr>
+                        <td><strong>Recharged.nl</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><span class="badge badge-own">Eigen</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Concurrenten (26)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Concurrent</th>
+                        <th>Gem. prijs</th>
+                        <th>Producten</th>
+                        <th>Website</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Marstek</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://marstek.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Thuisbatterij.io</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://thuisbatterij.io" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Thuisaccu</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://thuisaccu.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Baccu</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://baccu.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>UW Solar Installatie Shop</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://uwsolarinstallatieshop.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Nkon</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://nkon.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Thuisslimladen</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://thuisslimladen.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Batterijenhuis</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://batterijenhuis.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Jackery</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://nl.jackery.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Off Grid Power Station</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://offgridpowerstation.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Off Grid Supply</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://offgridsupply.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Indevolt</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://nl.indevolt.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Anker Solix</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://ankersolix.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Thuisbatterij Nederland</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://thuisbatterijnederland.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Zendure</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://zendure.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>123accu</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://123accu.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>AEG Thuisbatterij</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://aegthuisbatterij.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Ecoflow</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://ecoflow.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Ecoflow NL</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://nl.ecoflow.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Stralend Groen</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://stralendgroen.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Solar Power Supply</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://solarpowersupply.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Zinvolt</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://zinvolt.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Zonneplan</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://zonneplan.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Homewizard</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://homewizard.com" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Solago</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://solago.nl" target="_blank">Bezoeken →</a></td>
+                    </tr><tr>
+                        <td><strong>Stekker Batterij</strong></td>
+                        <td class="price">€0.00</td>
+                        <td>0</td>
+                        <td><a href="https://stekker-batterij.nl" target="_blank">Bezoeken →</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            <p>Competitor Tracker • Automatisch geupdate dagelijks om 23:00</p>
+        </footer>
+    </div>
+</body>
+</html>

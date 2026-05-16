@@ -1,0 +1,83 @@
+✅ Scheduler gestart - dagelijks check om 23:00
+   Druk Ctrl+C om te stoppen
+
+🚀 Eerste check wordt nu uitgevoerd...
+
+
+============================================================
+🔄 Dagelijkse concurrentcheck gestart: 2026-05-16 08:38:02
+============================================================
+
+📊 Scraping 28 competitors...
+  [1/28] Marstek...❌ Error scraping https://marstek.nl: 403 Client Error: Forbidden for url: https://marstek.nl/
+ ✓ (€0)
+  [2/28] Thuisbatterij.io...❌ Error scraping https://thuisbatterij.io: 403 Client Error: Forbidden for url: https://thuisbatterij.io/
+ ✓ (€0)
+  [3/28] Thuisaccu...❌ Error scraping https://thuisaccu.nl: 403 Client Error: Forbidden for url: https://thuisaccu.nl/
+ ✓ (€0)
+  [4/28] Baccu...❌ Error scraping https://baccu.nl: 403 Client Error: Forbidden for url: https://baccu.nl/
+ ✓ (€0)
+  [5/28] UW Solar Installatie Shop...❌ Error scraping https://uwsolarinstallatieshop.nl: 403 Client Error: Forbidden for url: https://uwsolarinstallatieshop.nl/
+ ✓ (€0)
+  [6/28] Nkon...❌ Error scraping https://nkon.nl: 403 Client Error: Forbidden for url: https://nkon.nl/
+ ✓ (€0)
+  [7/28] Thuisslimladen...❌ Error scraping https://thuisslimladen.nl: 403 Client Error: Forbidden for url: https://thuisslimladen.nl/
+ ✓ (€0)
+  [8/28] Batterijenhuis...❌ Error scraping https://batterijenhuis.nl: 403 Client Error: Forbidden for url: https://batterijenhuis.nl/
+ ✓ (€0)
+  [9/28] Jackery...❌ Error scraping https://nl.jackery.com: 403 Client Error: Forbidden for url: https://nl.jackery.com/
+ ✓ (€0)
+  [10/28] Off Grid Power Station...❌ Error scraping https://offgridpowerstation.nl: 403 Client Error: Forbidden for url: https://offgridpowerstation.nl/
+ ✓ (€0)
+  [11/28] Off Grid Supply...❌ Error scraping https://offgridsupply.nl: 403 Client Error: Forbidden for url: https://offgridsupply.nl/
+ ✓ (€0)
+  [12/28] Indevolt...❌ Error scraping https://nl.indevolt.com: 403 Client Error: Forbidden for url: https://nl.indevolt.com/
+ ✓ (€0)
+  [13/28] Anker Solix...❌ Error scraping https://ankersolix.com: 403 Client Error: Forbidden for url: https://ankersolix.com/
+ ✓ (€0)
+  [14/28] Thuisbatterij Nederland...❌ Error scraping https://thuisbatterijnederland.nl: 403 Client Error: Forbidden for url: https://thuisbatterijnederland.nl/
+ ✓ (€0)
+  [15/28] Zendure...❌ Error scraping https://zendure.nl: 403 Client Error: Forbidden for url: https://zendure.nl/
+ ✓ (€0)
+  [16/28] 123accu...❌ Error scraping https://123accu.nl: 403 Client Error: Forbidden for url: https://123accu.nl/
+ ✓ (€0)
+  [17/28] AEG Thuisbatterij...❌ Error scraping https://aegthuisbatterij.nl: 403 Client Error: Forbidden for url: https://aegthuisbatterij.nl/
+ ✓ (€0)
+  [18/28] Ecoflow...❌ Error scraping https://ecoflow.nl: 403 Client Error: Forbidden for url: https://ecoflow.nl/
+ ✓ (€0)
+  [19/28] Ecoflow NL...❌ Error scraping https://nl.ecoflow.com: 403 Client Error: Forbidden for url: https://nl.ecoflow.com/
+ ✓ (€0)
+  [20/28] Stralend Groen...❌ Error scraping https://stralendgroen.nl: 403 Client Error: Forbidden for url: https://stralendgroen.nl/
+ ✓ (€0)
+  [21/28] Solar Power Supply...❌ Error scraping https://solarpowersupply.nl: 403 Client Error: Forbidden for url: https://solarpowersupply.nl/
+ ✓ (€0)
+  [22/28] Zinvolt...❌ Error scraping https://zinvolt.com: 403 Client Error: Forbidden for url: https://zinvolt.com/
+ ✓ (€0)
+  [23/28] Zonneplan...❌ Error scraping https://zonneplan.nl: 403 Client Error: Forbidden for url: https://zonneplan.nl/
+ ✓ (€0)
+  [24/28] Homewizard...❌ Error scraping https://homewizard.com: 403 Client Error: Forbidden for url: https://homewizard.com/
+ ✓ (€0)
+  [25/28] Solago...❌ Error scraping https://solago.nl: 403 Client Error: Forbidden for url: https://solago.nl/
+ ✓ (€0)
+  [26/28] Stekker Batterij...❌ Error scraping https://stekker-batterij.nl: 403 Client Error: Forbidden for url: https://stekker-batterij.nl/
+ ✓ (€0)
+  [27/28] Thuisbatterij.nl...❌ Error scraping https://thuisbatterij.nl: 403 Client Error: Forbidden for url: https://thuisbatterij.nl/
+ ✓ (€0)
+  [28/28] Recharged.nl...❌ Error scraping https://recharged.nl: 403 Client Error: Forbidden for url: https://recharged.nl/
+ ✓ (€0)
+
+🤖 Generating AI summary.../home/user/test/competitor-tracker/competitor_tracker.py:190: DeprecationWarning: The model 'claude-3-5-haiku-20241022' is deprecated and will reach end-of-life on February 19th, 2026.
+Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.
+  message = client.messages.create(
+ ✓
+
+============================================================
+📋 SAMENVATTING:
+============================================================
+Samenvatting kon niet gegenereerd worden: "Could not resolve authentication method. Expected one of api_key, auth_token, or credentials to be set. Or for one of the `X-Api-Key` or `Authorization` headers to be explicitly omitted"
+
+✅ Check voltooid!
+📊 Dashboard: data/dashboard.html
+📁 Data opgeslagen: data/competitors_latest.json
+============================================================
+
