@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '3.0.1' );
+define( 'TB_CFG_VERSION', '3.0.2' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -148,26 +148,51 @@ function tb_cfg_v3_setup() {
 // ============================================================
 
 function tb_cfg_v3_render() {
-	global $product;
-	if ( ! $product ) {
+	// Prevent double render (Elementor and some themes call summary hooks more than once)
+	static $has_rendered = false;
+	if ( $has_rendered ) {
 		return;
 	}
 
+	global $product;
+	// Elementor sometimes doesn't set the global; fall back to get_the_ID()
+	if ( ! $product ) {
+		$product = wc_get_product( get_the_ID() );
+	}
+	if ( ! $product || ! $product->is_type( 'variable' ) ) {
+		return;
+	}
+
+	$has_rendered = true;
+
 	$pid        = $product->get_id();
-	$attributes = $product->get_variation_attributes(); // attr_name => [options]
+	$attributes = $product->get_variation_attributes();
 	$variations = tb_cfg_build_variations_data( $product );
 	$upsells    = tb_cfg_get_upsells( $pid );
 	$stack_cfg  = tb_cfg_get_stack_config( $pid, $attributes );
 
-	// Inject product data directly — wp_add_inline_script() cannot be called here
-	// because scripts are already printed by the time woocommerce_single_product_summary fires.
-	echo '<script id="tb-v3-data">var tbV3Data = ' . wp_json_encode( [
-		'productId'  => $pid,
-		'variations' => $variations,
-		'attributes' => tb_cfg_build_attributes_data( $product ),
-		'upsells'    => $upsells,
-		'stackCfg'   => $stack_cfg,
-	] ) . ';</script>' . "\n";
+	// Inject product data — JSON_HEX_* flags prevent any HTML/quote chars from breaking the JS
+	$json = wp_json_encode(
+		[
+			'productId'  => $pid,
+			'variations' => $variations,
+			'attributes' => tb_cfg_build_attributes_data( $product ),
+			'upsells'    => $upsells,
+			'stackCfg'   => $stack_cfg,
+		],
+		JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+	);
+	wp_print_inline_script_tag( 'var tbV3Data = ' . $json . ';' );
+
+	// Hide the native WC variations form — needed when Elementor renders its own
+	// "Add To Cart" widget which bypasses remove_action on woocommerce_template_single_add_to_cart.
+	echo '<style id="tb-hide-wc-form">
+		.variations_form .variations,
+		.variations_form .single_variation_wrap,
+		.variations_form .woocommerce-variation-add-to-cart {
+			display: none !important;
+		}
+	</style>' . "\n";
 
 	$has_stack = ! empty( $stack_cfg['enabled'] );
 	?>
