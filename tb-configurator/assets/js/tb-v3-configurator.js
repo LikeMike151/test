@@ -36,8 +36,21 @@
 		bindOptionButtons();
 		bindUpsellButtons();
 		bindCta();
+		applyDefaults();
 		updateAll();
 	});
+
+	// Pre-select WC default attributes so price shows on page load
+	function applyDefaults() {
+		var defaults = tbV3Data.defaults || {};
+		$.each(defaults, function (attrName, value) {
+			if (!value) return;
+			var attrKey = 'attribute_' + attrName;
+			state.selected[attrKey] = value;
+			$('.tb-v3-step[data-attr="' + attrKey + '"] .tb-v3-opt').removeClass('tb-v3-opt-active');
+			$('.tb-v3-step[data-attr="' + attrKey + '"] .tb-v3-opt[data-value="' + value + '"]').addClass('tb-v3-opt-active');
+		});
+	}
 
 	// ============================================================
 	// BINDINGS
@@ -194,14 +207,16 @@
 		var invValue  = invAttr ? (state.selected[invAttr] || '') : '';
 
 		// Determine if inverter is selected (and not "alleen batterij")
-		var showInverter = invAttr && invValue && !isOnlyBattery(invValue);
+		// Check against the human-readable label, not the slug, because slugs use dashes not spaces
+		var invLabel = invAttr ? getAttrLabel(invAttr, invValue) : '';
+		var showInverter = invAttr && invValue && !isOnlyBattery(invLabel);
 
 		// Parse capacity label for PFA4 / PFA2 counts
-		var parsed = parseCapacityLabel(capValue);
+		var capLabel = capAttr ? getAttrLabel(capAttr, capValue) : capValue;
+		var parsed = parseCapacityLabel(capLabel);
 
 		// Render inverter block
 		if (showInverter) {
-			var invLabel = getAttrLabel(invAttr, invValue);
 			$blocks.append(
 				$('<div class="tb-stack-block-inverter">').text(invLabel.substring(0, 18))
 			);
@@ -260,8 +275,8 @@
 		// PFA2 toggle
 		result.pfa2 = /PFA2/i.test(label);
 
-		// Total kWh from parentheses
-		var kwhMatch = label.match(/\((\d+)\s*kWh\)/i);
+		// Total kWh — first try parentheses format "(20 kWh)", then bare "20 kWh"
+		var kwhMatch = label.match(/\((\d+)\s*kWh\)/i) || label.match(/\b(\d+)\s*kWh\b/i);
 		if (kwhMatch) {
 			result.kwh = parseInt(kwhMatch[1]);
 		} else {
@@ -365,10 +380,10 @@
 			return v.id === state.variationId;
 		});
 		if (variation && variation.image) {
-			var $img = $('.woocommerce-product-gallery__image img').first();
-			if ($img.length) {
-				$img.attr('src', variation.image);
-			}
+			// Update the stack thumbnail (our left column)
+			$('#tbProductThumb').attr('src', variation.image);
+			// Also update the main WC gallery image if visible
+			$('.woocommerce-product-gallery__image img').first().attr('src', variation.image);
 		}
 	}
 

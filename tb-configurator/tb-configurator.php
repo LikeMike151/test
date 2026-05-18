@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '3.0.3' );
+define( 'TB_CFG_VERSION', '3.0.4' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -95,6 +95,8 @@ function tb_cfg_enqueue() {
 				'attributes' => tb_cfg_build_attributes_data( $_product ),
 				'upsells'    => tb_cfg_get_upsells( $_pid ),
 				'stackCfg'   => tb_cfg_get_stack_config( $_pid, $_attrs ),
+				'defaults'   => $_product->get_default_attributes(),
+				'thumbUrl'   => get_the_post_thumbnail_url( $_pid, 'medium' ) ?: '',
 			] );
 		}
 	}
@@ -216,9 +218,17 @@ function tb_cfg_v3_render() {
 		<div class="tb-v3-layout">
 
 			<?php if ( $has_stack ) : ?>
-			<!-- Linkerkolom: visuele productstapel -->
+			<!-- Linkerkolom: productthumbnail + visuele batterijstapel -->
 			<div class="tb-v3-col-left">
 				<div class="tb-v3-stack-wrap" id="tbStack">
+					<?php
+					$thumb_url = get_the_post_thumbnail_url( $pid, 'medium' );
+					if ( $thumb_url ) : ?>
+					<img src="<?php echo esc_url( $thumb_url ); ?>"
+					     alt="<?php echo esc_attr( $product->get_name() ); ?>"
+					     class="tb-v3-product-thumb"
+					     id="tbProductThumb" />
+					<?php endif; ?>
 					<div class="tb-stack-blocks" id="tbStackBlocks">
 						<!-- Dynamisch gevuld door JS -->
 					</div>
@@ -237,7 +247,7 @@ function tb_cfg_v3_render() {
 				$step = 1;
 				foreach ( $attributes as $attr_name => $options ) :
 					$attr_key  = 'attribute_' . sanitize_title( $attr_name );
-					$label     = wc_attribute_label( $attr_name, $product );
+					$label     = wp_strip_all_tags( wc_attribute_label( $attr_name, $product ) );
 					$is_cap    = ( ! empty( $stack_cfg['capacity_attr'] ) && $stack_cfg['capacity_attr'] === $attr_key );
 				?>
 				<div class="tb-v3-step<?php echo $is_cap ? ' tb-v3-step-capacity' : ''; ?>"
@@ -385,7 +395,7 @@ function tb_cfg_build_attributes_data( $product ) {
 		}
 		$out[] = [
 			'key'    => $attr_key,
-			'label'  => wc_attribute_label( $attr_name, $product ),
+			'label'  => wp_strip_all_tags( wc_attribute_label( $attr_name, $product ) ),
 			'labels' => $labels,
 		];
 	}

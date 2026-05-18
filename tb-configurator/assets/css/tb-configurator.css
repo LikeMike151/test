@@ -77,6 +77,16 @@
 	border-radius: var(--tb-radius-lg);
 }
 
+/* Productthumbnail in linkerkolom */
+.tb-v3-product-thumb {
+	width: 100%;
+	max-width: 200px;
+	height: auto;
+	border-radius: var(--tb-radius);
+	object-fit: contain;
+	display: block;
+}
+
 /* Stapel blokken */
 .tb-stack-blocks {
 	display: flex;
