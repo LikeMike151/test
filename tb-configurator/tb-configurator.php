@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '3.0.0' );
+define( 'TB_CFG_VERSION', '3.0.1' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -101,24 +101,46 @@ function tb_cfg_admin_enqueue( $hook ) {
 // V3: VERVANG WC VARIATION FORM OP ALLE VARIABELE PRODUCTEN
 // ============================================================
 
-add_action( 'woocommerce_before_single_product', 'tb_cfg_v3_setup' );
+// Body class + gallery suppression must happen before wp_head (body_class too late in summary hook)
+add_action( 'wp', 'tb_cfg_v3_early_init' );
+function tb_cfg_v3_early_init() {
+	if ( ! is_product() ) {
+		return;
+	}
+	$product = wc_get_product( get_the_ID() );
+	if ( ! $product || ! $product->is_type( 'variable' ) ) {
+		return;
+	}
+
+	add_filter( 'body_class', function( $classes ) {
+		$classes[] = 'tb-v3-active';
+		return $classes;
+	} );
+
+	$stack = get_post_meta( $product->get_id(), '_tb_cfg_stack', true );
+	if ( $stack ) {
+		add_filter( 'body_class', function( $classes ) {
+			$classes[] = 'tb-v3-stack-active';
+			return $classes;
+		} );
+		remove_action( 'woocommerce_before_single_product_summary', 'woocommerce_show_product_images', 20 );
+	}
+}
+
+// Hook into summary at priority 1 so we can remove WC's add-to-cart (priority 30) before it fires.
+// This works with both classic themes and Elementor's Single Product widget.
+add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_setup', 1 );
 function tb_cfg_v3_setup() {
 	global $product;
 	if ( ! $product || ! $product->is_type( 'variable' ) ) {
 		return;
 	}
 
-	// Remove default WooCommerce variation + add-to-cart
+	// Remove default WooCommerce variation + add-to-cart before it fires at prio 30
 	remove_action( 'woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30 );
 
 	// Add our v3 configurator in its place
 	add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_render', 30 );
-
-	// Mark body for CSS targeting
-	add_filter( 'body_class', function( $classes ) {
-		$classes[] = 'tb-v3-active';
-		return $classes;
-	} );
 }
 
 // ============================================================
@@ -137,17 +159,15 @@ function tb_cfg_v3_render() {
 	$upsells    = tb_cfg_get_upsells( $pid );
 	$stack_cfg  = tb_cfg_get_stack_config( $pid, $attributes );
 
-	// Inject product data into JS
-	wp_add_inline_script( 'tb-v3-configurator',
-		'var tbV3Data = ' . wp_json_encode( [
-			'productId'  => $pid,
-			'variations' => $variations,
-			'attributes' => tb_cfg_build_attributes_data( $product ),
-			'upsells'    => $upsells,
-			'stackCfg'   => $stack_cfg,
-		] ) . ';',
-		'before'
-	);
+	// Inject product data directly — wp_add_inline_script() cannot be called here
+	// because scripts are already printed by the time woocommerce_single_product_summary fires.
+	echo '<script id="tb-v3-data">var tbV3Data = ' . wp_json_encode( [
+		'productId'  => $pid,
+		'variations' => $variations,
+		'attributes' => tb_cfg_build_attributes_data( $product ),
+		'upsells'    => $upsells,
+		'stackCfg'   => $stack_cfg,
+	] ) . ';</script>' . "\n";
 
 	$has_stack = ! empty( $stack_cfg['enabled'] );
 	?>
@@ -604,23 +624,6 @@ function tb_cfg_save_meta( $post_id ) {
 			$clean[ sanitize_key( $gk ) ] = $clean_group;
 		}
 		update_post_meta( $post_id, '_tb_cfg_upsells', wp_json_encode( $clean ) );
-	}
-}
-
-// ============================================================
-// HIDE WC PRODUCT GALLERY WHEN VISUAL STACK IS ACTIVE
-// ============================================================
-
-add_action( 'woocommerce_before_single_product', 'tb_cfg_maybe_hide_gallery' );
-function tb_cfg_maybe_hide_gallery() {
-	global $product;
-	if ( ! $product ) {
-		return;
-	}
-	$stack = get_post_meta( $product->get_id(), '_tb_cfg_stack', true );
-	if ( $stack ) {
-		// Suppress the default WC gallery
-		remove_action( 'woocommerce_before_single_product_summary', 'woocommerce_show_product_images', 20 );
 	}
 }
 
