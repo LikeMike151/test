@@ -2,8 +2,8 @@
 /**
  * Plugin Name: TB Configurator
  * Plugin URI:  https://github.com/LikeMike151/test
- * Description: Batterij-configurator met visuele WooCommerce variatie-selector en besparingsberekening. Shortcodes: [tb_battery_configurator], [tb_product_configurator id="X"]
- * Version:     2.2.0
+ * Description: Visuele WooCommerce productconfigurator met upsell-systeem en besparingscalculator voor thuisbatterij.nl
+ * Version:     3.0.0
  * Author:      Thuisbatterij.nl
  * Text Domain: tb-configurator
  * Requires Plugins: woocommerce
@@ -14,12 +14,12 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '2.2.0' );
+define( 'TB_CFG_VERSION', '3.0.0' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
 // ============================================================
-// AUTO-UPDATES via Plugin Update Checker v5 (GitHub Releases)
+// AUTO-UPDATES via Plugin Update Checker v5
 // ============================================================
 
 require_once TB_CFG_PATH . 'vendor/plugin-update-checker/plugin-update-checker.php';
@@ -31,8 +31,6 @@ $tb_cfg_updater = PucFactory::buildUpdateChecker(
 	__FILE__,
 	'tb-configurator'
 );
-
-// Updates komen uit GitHub Releases; de zip is het release-asset
 $tb_cfg_updater->getVcsApi()->enableReleaseAssets();
 
 // ============================================================
@@ -52,6 +50,7 @@ function tb_cfg_enqueue() {
 		TB_CFG_VERSION
 	);
 
+	// Legacy calculator (shortcode use)
 	wp_enqueue_script(
 		'tb-battery-calc',
 		TB_CFG_URL . 'assets/js/tb-battery-calc.js',
@@ -60,634 +59,607 @@ function tb_cfg_enqueue() {
 		true
 	);
 
+	// V3 product configurator
 	wp_enqueue_script(
-		'tb-configurator',
-		TB_CFG_URL . 'assets/js/tb-configurator.js',
-		[ 'jquery', 'tb-battery-calc' ],
+		'tb-v3-configurator',
+		TB_CFG_URL . 'assets/js/tb-v3-configurator.js',
+		[ 'jquery' ],
 		TB_CFG_VERSION,
 		true
 	);
 
-	wp_localize_script( 'tb-configurator', 'tbCfg', [
+	wp_localize_script( 'tb-v3-configurator', 'tbCfg', [
 		'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 		'nonce'   => wp_create_nonce( 'tb_cfg_nonce' ),
 		'cartUrl' => function_exists( 'wc_get_cart_url' ) ? wc_get_cart_url() : '',
 		'i18n'    => [
-			'addToCart'     => __( 'In winkelwagen', 'tb-configurator' ),
-			'adding'        => __( 'Toevoegen…', 'tb-configurator' ),
-			'added'         => __( 'Toegevoegd!', 'tb-configurator' ),
-			'selectOptions' => __( 'Selecteer opties', 'tb-configurator' ),
-			'outOfStock'    => __( 'Niet op voorraad', 'tb-configurator' ),
-			'viewCart'      => __( 'Bekijk winkelwagen', 'tb-configurator' ),
+			'adding'     => __( 'Toevoegen…', 'tb-configurator' ),
+			'added'      => __( 'Toegevoegd!', 'tb-configurator' ),
+			'outOfStock' => __( 'Niet op voorraad', 'tb-configurator' ),
+			'selectAll'  => __( 'Maak eerst een keuze bij alle stappen', 'tb-configurator' ),
+			'ordering'   => __( 'Bestelling wordt verwerkt…', 'tb-configurator' ),
 		],
 	] );
 }
 
-// ============================================================
-// WC PRODUCT PAGE: vervang dropdown selects door button-groepen
-// ============================================================
-
-add_filter( 'woocommerce_dropdown_variation_attribute_options_html', 'tb_cfg_variation_dropdown_html', 20, 2 );
-function tb_cfg_variation_dropdown_html( $html, $args ) {
-	if ( empty( $args['options'] ) || empty( $args['attribute'] ) ) {
-		return $html;
+// Admin: meta box JS/CSS
+add_action( 'admin_enqueue_scripts', 'tb_cfg_admin_enqueue' );
+function tb_cfg_admin_enqueue( $hook ) {
+	if ( ! in_array( $hook, [ 'post.php', 'post-new.php' ], true ) ) {
+		return;
 	}
-
-	$product   = $args['product'];
-	$attribute = $args['attribute'];
-	$selected  = $args['selected'] ?? '';
-	$name      = 'attribute_' . sanitize_title( $attribute );
-	$id        = sanitize_title( $attribute ) . '-' . ( $product ? $product->get_id() : 'x' );
-	$label     = wc_attribute_label( $attribute, $product );
-
-	// Originele select hidden houden voor WC-compatibiliteit
-	$orig = sprintf(
-		'<select id="%s" name="%s" data-attribute_name="%s" class="tb-hidden-select" style="display:none">',
-		esc_attr( $id ),
-		esc_attr( $name ),
-		esc_attr( $name )
+	wp_enqueue_script(
+		'tb-admin-meta',
+		TB_CFG_URL . 'assets/js/tb-admin-meta.js',
+		[ 'jquery' ],
+		TB_CFG_VERSION,
+		true
 	);
-	$orig .= '<option value="">' . esc_html__( 'Kies een optie', 'tb-configurator' ) . '</option>';
-	foreach ( $args['options'] as $option ) {
-		$orig .= sprintf(
-			'<option value="%s"%s>%s</option>',
-			esc_attr( $option ),
-			selected( $selected, $option, false ),
-			esc_html( $option )
-		);
-	}
-	$orig .= '</select>';
-
-	// Knoppengroep
-	$buttons = '<div class="tb-btn-group" data-attr="' . esc_attr( $name ) . '">';
-	foreach ( $args['options'] as $option ) {
-		// Converteer taxonomie-slug naar echte weergavenaam
-		$label_text = $option;
-		if ( taxonomy_exists( $attribute ) ) {
-			$term = get_term_by( 'slug', $option, $attribute );
-			if ( $term && ! is_wp_error( $term ) ) {
-				$label_text = $term->name;
-			}
-		}
-
-		$active   = $selected === $option ? ' tb-active' : '';
-		$buttons .= sprintf(
-			'<button type="button" class="tb-opt-btn%s" data-value="%s" data-select-id="%s">%s</button>',
-			$active,
-			esc_attr( $option ),
-			esc_attr( $id ),
-			esc_html( $label_text )
-		);
-	}
-	$buttons .= '</div>';
-
-	return $orig . $buttons;
 }
 
-// Body-class zodat CSS productpagina-specifieke stijlen kan toepassen
-add_action( 'woocommerce_before_single_product', 'tb_cfg_mark_product_page' );
-function tb_cfg_mark_product_page() {
+// ============================================================
+// V3: VERVANG WC VARIATION FORM OP ALLE VARIABELE PRODUCTEN
+// ============================================================
+
+add_action( 'woocommerce_before_single_product', 'tb_cfg_v3_setup' );
+function tb_cfg_v3_setup() {
+	global $product;
+	if ( ! $product || ! $product->is_type( 'variable' ) ) {
+		return;
+	}
+
+	// Remove default WooCommerce variation + add-to-cart
+	remove_action( 'woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30 );
+
+	// Add our v3 configurator in its place
+	add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_render', 30 );
+
+	// Mark body for CSS targeting
 	add_filter( 'body_class', function( $classes ) {
-		$classes[] = 'tb-product-page';
+		$classes[] = 'tb-v3-active';
 		return $classes;
 	} );
 }
 
-// Calculator in de rechterkolom van het product, direct ná de bestelknop (prioriteit 35 = na add-to-cart op 30)
-add_action( 'woocommerce_single_product_summary', 'tb_cfg_product_page_calculator', 35 );
-function tb_cfg_product_page_calculator() {
-	if ( ! is_product() ) {
+// ============================================================
+// V3: RENDER CONFIGURATOR
+// ============================================================
+
+function tb_cfg_v3_render() {
+	global $product;
+	if ( ! $product ) {
 		return;
 	}
+
+	$pid        = $product->get_id();
+	$attributes = $product->get_variation_attributes(); // attr_name => [options]
+	$variations = tb_cfg_build_variations_data( $product );
+	$upsells    = tb_cfg_get_upsells( $pid );
+	$stack_cfg  = tb_cfg_get_stack_config( $pid, $attributes );
+
+	// Inject product data into JS
+	wp_add_inline_script( 'tb-v3-configurator',
+		'var tbV3Data = ' . wp_json_encode( [
+			'productId'  => $pid,
+			'variations' => $variations,
+			'attributes' => tb_cfg_build_attributes_data( $product ),
+			'upsells'    => $upsells,
+			'stackCfg'   => $stack_cfg,
+		] ) . ';',
+		'before'
+	);
+
+	$has_stack = ! empty( $stack_cfg['enabled'] );
 	?>
-	<div class="tb-product-calc-section">
-		<button type="button" class="tb-product-calc-toggle" id="tbProductCalcToggle" aria-expanded="false">
-			<span class="tb-toggle-icon">🔋</span>
-			<?php esc_html_e( 'Bereken jouw besparing', 'tb-configurator' ); ?>
-			<span class="tb-toggle-arrow" aria-hidden="true">▾</span>
-		</button>
-		<div class="tb-product-calc-body" id="tbProductCalcBody" style="display:none">
-			<?php tb_cfg_render_calculator(); ?>
-		</div>
-	</div>
+	<div class="tb-v3-configurator<?php echo $has_stack ? ' tb-v3-has-stack' : ''; ?>"
+	     data-product-id="<?php echo esc_attr( $pid ); ?>">
+
+		<div class="tb-v3-layout">
+
+			<?php if ( $has_stack ) : ?>
+			<!-- Linkerkolom: visuele productstapel -->
+			<div class="tb-v3-col-left">
+				<div class="tb-v3-stack-wrap" id="tbStack">
+					<div class="tb-stack-blocks" id="tbStackBlocks">
+						<!-- Dynamisch gevuld door JS -->
+					</div>
+					<div class="tb-stack-info">
+						<div class="tb-stack-kwh" id="tbStackKwh">0 kWh</div>
+						<div class="tb-stack-slots" id="tbStackSlots"></div>
+					</div>
+				</div>
+			</div>
+			<?php endif; ?>
+
+			<!-- Rechterkolom: configuratie + cart -->
+			<div class="tb-v3-col-right">
+
+				<?php
+				$step = 1;
+				foreach ( $attributes as $attr_name => $options ) :
+					$attr_key  = 'attribute_' . sanitize_title( $attr_name );
+					$label     = wc_attribute_label( $attr_name, $product );
+					$is_cap    = ( ! empty( $stack_cfg['capacity_attr'] ) && $stack_cfg['capacity_attr'] === $attr_key );
+				?>
+				<div class="tb-v3-step<?php echo $is_cap ? ' tb-v3-step-capacity' : ''; ?>"
+				     data-attr="<?php echo esc_attr( $attr_key ); ?>"
+				     data-step="<?php echo esc_attr( $step ); ?>">
+					<div class="tb-v3-step-header">
+						<span class="tb-v3-step-num"><?php echo esc_html( $step ); ?></span>
+						<span class="tb-v3-step-label"><?php echo esc_html( $label ); ?></span>
+					</div>
+					<div class="tb-v3-options" role="group" aria-label="<?php echo esc_attr( $label ); ?>">
+						<?php foreach ( $options as $option ) :
+							$term_label = $option;
+							if ( taxonomy_exists( $attr_name ) ) {
+								$term = get_term_by( 'slug', $option, $attr_name );
+								if ( $term && ! is_wp_error( $term ) ) {
+									$term_label = $term->name;
+								}
+							}
+						?>
+						<button type="button"
+						        class="tb-v3-opt"
+						        data-value="<?php echo esc_attr( $option ); ?>"
+						        data-attr="<?php echo esc_attr( $attr_key ); ?>">
+							<?php echo esc_html( $term_label ); ?>
+						</button>
+						<?php endforeach; ?>
+					</div>
+					<!-- Hidden select voor WC compat -->
+					<select name="<?php echo esc_attr( $attr_key ); ?>"
+					        class="tb-v3-hidden-select"
+					        data-attribute_name="<?php echo esc_attr( $attr_key ); ?>"
+					        style="display:none">
+						<option value=""><?php esc_html_e( 'Kies een optie', 'tb-configurator' ); ?></option>
+						<?php foreach ( $options as $option ) : ?>
+						<option value="<?php echo esc_attr( $option ); ?>"><?php echo esc_html( $option ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+				<?php
+				$step++;
+				endforeach;
+				?>
+
+				<?php if ( ! empty( $upsells ) ) : ?>
+				<!-- Upsell blokken -->
+				<?php foreach ( $upsells as $group_key => $group ) : ?>
+				<div class="tb-v3-upsell" data-group="<?php echo esc_attr( $group_key ); ?>">
+					<div class="tb-v3-upsell-header">
+						<span class="tb-v3-step-num"><?php echo esc_html( $step ); ?></span>
+						<span class="tb-v3-step-label"><?php echo esc_html( $group['label'] ); ?></span>
+						<span class="tb-v3-upsell-badge"><?php esc_html_e( '+ los product', 'tb-configurator' ); ?></span>
+					</div>
+					<div class="tb-v3-upsell-sub"><?php esc_html_e( 'Wordt los toegevoegd aan winkelwagen', 'tb-configurator' ); ?></div>
+					<div class="tb-v3-options" role="group">
+						<?php if ( ! empty( $group['none_label'] ) ) : ?>
+						<button type="button" class="tb-v3-opt tb-v3-opt-active"
+						        data-group="<?php echo esc_attr( $group_key ); ?>"
+						        data-product-id="0"
+						        data-price="0">
+							<?php echo esc_html( $group['none_label'] ); ?>
+						</button>
+						<?php endif; ?>
+						<?php foreach ( $group['options'] as $opt ) : ?>
+						<button type="button" class="tb-v3-opt"
+						        data-group="<?php echo esc_attr( $group_key ); ?>"
+						        data-product-id="<?php echo esc_attr( $opt['product_id'] ); ?>"
+						        data-price="<?php echo esc_attr( $opt['price'] ); ?>">
+							<?php echo esc_html( $opt['label'] ); ?>
+							<?php if ( $opt['price'] > 0 ) : ?>
+							<span class="tb-v3-opt-price">+ <?php echo wc_price( $opt['price'] ); // phpcs:ignore ?></span>
+							<?php endif; ?>
+						</button>
+						<?php endforeach; ?>
+					</div>
+				</div>
+				<?php
+				$step++;
+				endforeach;
+				?>
+				<?php endif; ?>
+
+				<!-- Cart preview -->
+				<div class="tb-v3-cart-preview" id="tbCartPreview">
+					<div class="tb-v3-cart-label"><?php esc_html_e( 'Winkelwagen preview', 'tb-configurator' ); ?></div>
+					<div class="tb-v3-cart-main" id="tbCartMain">
+						<span class="tb-v3-cart-name" id="tbCartMainName"><?php echo esc_html( $product->get_name() ); ?></span>
+						<span class="tb-v3-cart-price" id="tbCartMainPrice">—</span>
+					</div>
+					<div class="tb-v3-cart-upsells" id="tbCartUpsells"></div>
+					<div class="tb-v3-cart-divider"></div>
+					<div class="tb-v3-cart-total">
+						<span><?php esc_html_e( 'Totaal incl. btw', 'tb-configurator' ); ?></span>
+						<span class="tb-v3-cart-total-price" id="tbCartTotal">—</span>
+					</div>
+				</div>
+
+				<!-- CTA knop -->
+				<button type="button" class="tb-v3-cta" id="tbCta" disabled>
+					<?php esc_html_e( 'Deze thuisbatterij bestellen »', 'tb-configurator' ); ?>
+				</button>
+				<div class="tb-v3-cta-notice" id="tbCtaNotice" aria-live="polite"></div>
+
+				<!-- Hidden: WC variation_id -->
+				<input type="hidden" id="tbVariationId" value="" />
+
+			</div><!-- .tb-v3-col-right -->
+		</div><!-- .tb-v3-layout -->
+	</div><!-- .tb-v3-configurator -->
 	<?php
 }
 
 // ============================================================
-// SHORTCODE: [tb_battery_configurator category="slug" product_id="123" show_calc="yes"]
+// HELPERS: BUILD DATA FOR JS
+// ============================================================
+
+function tb_cfg_build_variations_data( $product ) {
+	$out = [];
+	foreach ( $product->get_available_variations() as $v ) {
+		$out[] = [
+			'id'         => $v['variation_id'],
+			'price'      => (float) $v['display_price'],
+			'price_html' => $v['price_html'],
+			'attributes' => $v['attributes'],
+			'in_stock'   => $v['is_in_stock'],
+			'image'      => $v['image']['url'] ?? '',
+		];
+	}
+	return $out;
+}
+
+function tb_cfg_build_attributes_data( $product ) {
+	$out = [];
+	foreach ( $product->get_variation_attributes() as $attr_name => $options ) {
+		$attr_key = 'attribute_' . sanitize_title( $attr_name );
+		$labels   = [];
+		foreach ( $options as $slug ) {
+			$label = $slug;
+			if ( taxonomy_exists( $attr_name ) ) {
+				$term = get_term_by( 'slug', $slug, $attr_name );
+				if ( $term && ! is_wp_error( $term ) ) {
+					$label = $term->name;
+				}
+			}
+			$labels[ $slug ] = $label;
+		}
+		$out[] = [
+			'key'    => $attr_key,
+			'label'  => wc_attribute_label( $attr_name, $product ),
+			'labels' => $labels,
+		];
+	}
+	return $out;
+}
+
+function tb_cfg_get_stack_config( $pid, $attributes ) {
+	$enabled  = (bool) get_post_meta( $pid, '_tb_cfg_stack', true );
+	$cap_attr = get_post_meta( $pid, '_tb_cfg_capacity_attr', true );
+	$inv_attr = get_post_meta( $pid, '_tb_cfg_inverter_attr', true );
+
+	return [
+		'enabled'       => $enabled,
+		'capacity_attr' => $cap_attr ?: '',
+		'inverter_attr' => $inv_attr ?: '',
+	];
+}
+
+function tb_cfg_get_upsells( $pid ) {
+	$raw = get_post_meta( $pid, '_tb_cfg_upsells', true );
+	if ( ! $raw ) {
+		return [];
+	}
+	$groups = json_decode( $raw, true );
+	if ( ! is_array( $groups ) ) {
+		return [];
+	}
+
+	// Enrich with live WC prices for each upsell product
+	foreach ( $groups as $gk => &$group ) {
+		if ( ! isset( $group['options'] ) ) {
+			continue;
+		}
+		foreach ( $group['options'] as &$opt ) {
+			if ( empty( $opt['product_id'] ) ) {
+				continue;
+			}
+			$p = wc_get_product( (int) $opt['product_id'] );
+			if ( $p ) {
+				if ( empty( $opt['price'] ) ) {
+					$opt['price'] = (float) $p->get_price();
+				}
+				if ( empty( $opt['label'] ) ) {
+					$opt['label'] = $p->get_name();
+				}
+			}
+		}
+		unset( $opt );
+	}
+	unset( $group );
+
+	return $groups;
+}
+
+// ============================================================
+// AJAX: MEERDERE PRODUCTEN IN ÉÉN KLIK AAN WINKELWAGEN
+// ============================================================
+
+add_action( 'wp_ajax_tb_multi_add_to_cart', 'tb_cfg_ajax_multi_add' );
+add_action( 'wp_ajax_nopriv_tb_multi_add_to_cart', 'tb_cfg_ajax_multi_add' );
+function tb_cfg_ajax_multi_add() {
+	check_ajax_referer( 'tb_cfg_nonce', 'nonce' );
+
+	$items = isset( $_POST['items'] ) ? (array) $_POST['items'] : [];
+	if ( empty( $items ) ) {
+		wp_send_json_error( [ 'message' => 'Geen producten opgegeven.' ] );
+	}
+
+	$added = [];
+	foreach ( $items as $item ) {
+		$product_id   = absint( $item['product_id'] ?? 0 );
+		$variation_id = absint( $item['variation_id'] ?? 0 );
+		$quantity     = max( 1, absint( $item['quantity'] ?? 1 ) );
+		$variation    = [];
+
+		if ( isset( $item['variation'] ) && is_array( $item['variation'] ) ) {
+			foreach ( $item['variation'] as $k => $v ) {
+				$variation[ sanitize_text_field( $k ) ] = sanitize_text_field( $v );
+			}
+		}
+
+		if ( ! $product_id ) {
+			continue;
+		}
+
+		$result = WC()->cart->add_to_cart( $product_id, $quantity, $variation_id, $variation );
+		if ( $result ) {
+			$added[] = $product_id;
+		}
+	}
+
+	if ( empty( $added ) ) {
+		$notices = wc_get_notices( 'error' );
+		$msg     = ! empty( $notices ) ? wp_strip_all_tags( $notices[0]['notice'] ) : 'Kon producten niet toevoegen.';
+		wc_clear_notices();
+		wp_send_json_error( [ 'message' => $msg ] );
+	}
+
+	WC()->cart->calculate_totals();
+	wp_send_json_success( [
+		'cart_count' => WC()->cart->get_cart_contents_count(),
+		'cart_url'   => wc_get_cart_url(),
+		'added'      => $added,
+	] );
+}
+
+// ============================================================
+// ADMIN: META BOX VOOR UPSELL + STACK CONFIGURATIE
+// ============================================================
+
+add_action( 'add_meta_boxes', 'tb_cfg_add_meta_box' );
+function tb_cfg_add_meta_box() {
+	add_meta_box(
+		'tb-configurator-settings',
+		__( 'TB Configurator', 'tb-configurator' ),
+		'tb_cfg_meta_box_render',
+		'product',
+		'normal',
+		'default'
+	);
+}
+
+function tb_cfg_meta_box_render( $post ) {
+	wp_nonce_field( 'tb_cfg_meta_save', 'tb_cfg_meta_nonce' );
+
+	$pid        = $post->ID;
+	$product    = wc_get_product( $pid );
+	$stack      = get_post_meta( $pid, '_tb_cfg_stack', true );
+	$cap_attr   = get_post_meta( $pid, '_tb_cfg_capacity_attr', true );
+	$inv_attr   = get_post_meta( $pid, '_tb_cfg_inverter_attr', true );
+	$upsells_raw = get_post_meta( $pid, '_tb_cfg_upsells', true );
+	$upsells    = $upsells_raw ? json_decode( $upsells_raw, true ) : [];
+
+	// Build attribute list for selects
+	$attrs = [];
+	if ( $product && $product->is_type( 'variable' ) ) {
+		foreach ( $product->get_variation_attributes() as $attr_name => $options ) {
+			$key          = 'attribute_' . sanitize_title( $attr_name );
+			$attrs[ $key ] = wc_attribute_label( $attr_name, $product );
+		}
+	}
+	?>
+	<style>
+		.tb-meta-section { margin-bottom: 18px; border-bottom: 1px solid #eee; padding-bottom: 14px; }
+		.tb-meta-section h4 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; color: #666; letter-spacing: .06em; }
+		.tb-meta-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+		.tb-meta-row label { min-width: 160px; font-weight: 600; font-size: 13px; }
+		.tb-meta-row select, .tb-meta-row input[type="text"], .tb-meta-row input[type="number"] { flex: 1; max-width: 300px; }
+		.tb-upsell-group { background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+		.tb-upsell-group-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+		.tb-upsell-option { display: grid; grid-template-columns: 1fr 1fr 100px 30px; gap: 6px; margin-bottom: 6px; align-items: center; }
+		.tb-upsell-option input { width: 100%; }
+		.tb-btn-small { padding: 4px 10px; font-size: 12px; cursor: pointer; }
+		.button-remove { color: #c00; border-color: #c00; }
+	</style>
+
+	<div class="tb-meta-section">
+		<h4><?php esc_html_e( 'Visuele productstapel', 'tb-configurator' ); ?></h4>
+		<div class="tb-meta-row">
+			<label><?php esc_html_e( 'Toon visuele stapel', 'tb-configurator' ); ?></label>
+			<input type="checkbox" name="tb_cfg_stack" value="1" <?php checked( $stack, '1' ); ?> />
+		</div>
+		<div class="tb-meta-row">
+			<label><?php esc_html_e( 'Capaciteit attribuut', 'tb-configurator' ); ?></label>
+			<select name="tb_cfg_capacity_attr">
+				<option value=""><?php esc_html_e( '— Geen —', 'tb-configurator' ); ?></option>
+				<?php foreach ( $attrs as $key => $lbl ) : ?>
+				<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $cap_attr, $key ); ?>><?php echo esc_html( $lbl ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		</div>
+		<div class="tb-meta-row">
+			<label><?php esc_html_e( 'Omvormer attribuut', 'tb-configurator' ); ?></label>
+			<select name="tb_cfg_inverter_attr">
+				<option value=""><?php esc_html_e( '— Geen —', 'tb-configurator' ); ?></option>
+				<?php foreach ( $attrs as $key => $lbl ) : ?>
+				<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $inv_attr, $key ); ?>><?php echo esc_html( $lbl ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		</div>
+	</div>
+
+	<div class="tb-meta-section">
+		<h4><?php esc_html_e( 'Upsell-producten (los toegevoegd aan winkelwagen)', 'tb-configurator' ); ?></h4>
+		<p style="font-size:12px;color:#666;margin:0 0 10px;">
+			<?php esc_html_e( 'Voeg groepen toe zoals "Meter" of "Communicatiemodule". Elke groep verschijnt als een aparte stap in de configurator.', 'tb-configurator' ); ?>
+		</p>
+		<div id="tbUpsellGroups">
+			<?php
+			if ( ! empty( $upsells ) ) :
+				foreach ( $upsells as $gk => $group ) :
+					tb_cfg_render_upsell_group_admin( $gk, $group );
+				endforeach;
+			endif;
+			?>
+		</div>
+		<button type="button" class="button tb-btn-small" id="tbAddGroup">
+			<?php esc_html_e( '+ Groep toevoegen', 'tb-configurator' ); ?>
+		</button>
+		<input type="hidden" name="tb_cfg_upsells" id="tbUpsellsJson" value="<?php echo esc_attr( $upsells_raw ?: '[]' ); ?>" />
+	</div>
+	<?php
+}
+
+function tb_cfg_render_upsell_group_admin( $gk, $group ) {
+	?>
+	<div class="tb-upsell-group" data-group-key="<?php echo esc_attr( $gk ); ?>">
+		<div class="tb-upsell-group-header">
+			<strong><?php esc_html_e( 'Groep', 'tb-configurator' ); ?>:</strong>
+			<input type="text" class="tb-group-label" value="<?php echo esc_attr( $group['label'] ?? '' ); ?>"
+			       placeholder="<?php esc_attr_e( 'bijv. Meter', 'tb-configurator' ); ?>" style="max-width:200px" />
+			&nbsp;&nbsp;
+			<strong><?php esc_html_e( 'Sla-over tekst', 'tb-configurator' ); ?>:</strong>
+			<input type="text" class="tb-group-none" value="<?php echo esc_attr( $group['none_label'] ?? '' ); ?>"
+			       placeholder="<?php esc_attr_e( 'bijv. Ik heb er al een', 'tb-configurator' ); ?>" style="max-width:200px" />
+			<button type="button" class="button button-small button-remove tb-remove-group"><?php esc_html_e( 'Verwijder groep', 'tb-configurator' ); ?></button>
+		</div>
+		<div style="display:grid;grid-template-columns:1fr 1fr 120px 30px;gap:6px;margin-bottom:4px;font-size:11px;font-weight:700;color:#666">
+			<span><?php esc_html_e( 'Product ID', 'tb-configurator' ); ?></span>
+			<span><?php esc_html_e( 'Label', 'tb-configurator' ); ?></span>
+			<span><?php esc_html_e( 'Prijs (€)', 'tb-configurator' ); ?></span>
+			<span></span>
+		</div>
+		<div class="tb-upsell-options">
+			<?php if ( ! empty( $group['options'] ) ) : ?>
+			<?php foreach ( $group['options'] as $opt ) : ?>
+			<div class="tb-upsell-option">
+				<input type="number" class="tb-opt-pid" value="<?php echo esc_attr( $opt['product_id'] ?? '' ); ?>" placeholder="Product ID" />
+				<input type="text" class="tb-opt-label" value="<?php echo esc_attr( $opt['label'] ?? '' ); ?>" placeholder="<?php esc_attr_e( 'Label', 'tb-configurator' ); ?>" />
+				<input type="number" class="tb-opt-price" step="0.01" value="<?php echo esc_attr( $opt['price'] ?? '' ); ?>" placeholder="0.00" />
+				<button type="button" class="button button-small button-remove tb-remove-option">✕</button>
+			</div>
+			<?php endforeach; ?>
+			<?php endif; ?>
+		</div>
+		<button type="button" class="button tb-btn-small tb-add-option">+ <?php esc_html_e( 'Optie toevoegen', 'tb-configurator' ); ?></button>
+	</div>
+	<?php
+}
+
+add_action( 'save_post_product', 'tb_cfg_save_meta' );
+function tb_cfg_save_meta( $post_id ) {
+	if ( ! isset( $_POST['tb_cfg_meta_nonce'] ) || ! wp_verify_nonce( $_POST['tb_cfg_meta_nonce'], 'tb_cfg_meta_save' ) ) {
+		return;
+	}
+	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+		return;
+	}
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return;
+	}
+
+	update_post_meta( $post_id, '_tb_cfg_stack', isset( $_POST['tb_cfg_stack'] ) ? '1' : '0' );
+	update_post_meta( $post_id, '_tb_cfg_capacity_attr', sanitize_text_field( $_POST['tb_cfg_capacity_attr'] ?? '' ) );
+	update_post_meta( $post_id, '_tb_cfg_inverter_attr', sanitize_text_field( $_POST['tb_cfg_inverter_attr'] ?? '' ) );
+
+	$upsells_raw = wp_unslash( $_POST['tb_cfg_upsells'] ?? '[]' );
+	$upsells     = json_decode( $upsells_raw, true );
+	if ( is_array( $upsells ) ) {
+		// Sanitize each entry
+		$clean = [];
+		foreach ( $upsells as $gk => $group ) {
+			$clean_group = [
+				'label'      => sanitize_text_field( $group['label'] ?? '' ),
+				'none_label' => sanitize_text_field( $group['none_label'] ?? '' ),
+				'options'    => [],
+			];
+			foreach ( (array) ( $group['options'] ?? [] ) as $opt ) {
+				$clean_group['options'][] = [
+					'product_id' => absint( $opt['product_id'] ?? 0 ),
+					'label'      => sanitize_text_field( $opt['label'] ?? '' ),
+					'price'      => (float) ( $opt['price'] ?? 0 ),
+				];
+			}
+			$clean[ sanitize_key( $gk ) ] = $clean_group;
+		}
+		update_post_meta( $post_id, '_tb_cfg_upsells', wp_json_encode( $clean ) );
+	}
+}
+
+// ============================================================
+// HIDE WC PRODUCT GALLERY WHEN VISUAL STACK IS ACTIVE
+// ============================================================
+
+add_action( 'woocommerce_before_single_product', 'tb_cfg_maybe_hide_gallery' );
+function tb_cfg_maybe_hide_gallery() {
+	global $product;
+	if ( ! $product ) {
+		return;
+	}
+	$stack = get_post_meta( $product->get_id(), '_tb_cfg_stack', true );
+	if ( $stack ) {
+		// Suppress the default WC gallery
+		remove_action( 'woocommerce_before_single_product_summary', 'woocommerce_show_product_images', 20 );
+	}
+}
+
+// ============================================================
+// BACKWARDS COMPAT: SHORTCODES (V2)
 // ============================================================
 
 add_shortcode( 'tb_battery_configurator', 'tb_cfg_full_shortcode' );
 function tb_cfg_full_shortcode( $atts ) {
-	$atts = shortcode_atts( [
-		'category'   => '',
-		'product_id' => '',
-		'show_calc'  => 'yes',
-	], $atts, 'tb_battery_configurator' );
-
+	$atts = shortcode_atts( [ 'category' => '', 'product_id' => '', 'show_calc' => 'yes' ], $atts );
 	if ( ! class_exists( 'WooCommerce' ) ) {
-		return '<p>' . esc_html__( 'WooCommerce is vereist.', 'tb-configurator' ) . '</p>';
+		return '<p>WooCommerce is vereist.</p>';
 	}
-
 	ob_start();
 	tb_cfg_render_full( $atts );
 	return ob_get_clean();
 }
 
-// ============================================================
-// SHORTCODE: [tb_product_configurator id="123"]
-// ============================================================
-
 add_shortcode( 'tb_product_configurator', 'tb_cfg_product_shortcode' );
 function tb_cfg_product_shortcode( $atts ) {
-	$atts = shortcode_atts( [ 'id' => '' ], $atts, 'tb_product_configurator' );
-
-	if ( ! class_exists( 'WooCommerce' ) ) {
-		return '<p>' . esc_html__( 'WooCommerce is vereist.', 'tb-configurator' ) . '</p>';
-	}
-	if ( ! $atts['id'] ) {
-		return '<p>' . esc_html__( 'Geef een product ID op: [tb_product_configurator id="123"]', 'tb-configurator' ) . '</p>';
-	}
-
-	$product = wc_get_product( absint( $atts['id'] ) );
+	$atts    = shortcode_atts( [ 'id' => '' ], $atts );
+	$product = $atts['id'] ? wc_get_product( absint( $atts['id'] ) ) : null;
 	if ( ! $product ) {
-		return '<p>' . esc_html__( 'Product niet gevonden.', 'tb-configurator' ) . '</p>';
+		return '<p>Product niet gevonden. Geef een geldig ID op: [tb_product_configurator id="123"]</p>';
 	}
-
 	ob_start();
-	tb_cfg_render_product( $product );
+	tb_cfg_v3_render_for_product( $product );
 	return ob_get_clean();
 }
 
-// ============================================================
-// AJAX: variaties ophalen
-// ============================================================
-
-add_action( 'wp_ajax_tb_get_variations', 'tb_cfg_ajax_variations' );
-add_action( 'wp_ajax_nopriv_tb_get_variations', 'tb_cfg_ajax_variations' );
-function tb_cfg_ajax_variations() {
-	check_ajax_referer( 'tb_cfg_nonce', 'nonce' );
-
-	$product_id = absint( $_POST['product_id'] ?? 0 );
-	if ( ! $product_id ) {
-		wp_send_json_error( 'Geen product ID' );
-	}
-
-	$product = wc_get_product( $product_id );
-	if ( ! $product || ! $product->is_type( 'variable' ) ) {
-		wp_send_json_error( 'Geen variabel product' );
-	}
-
-	$out = [];
-	foreach ( $product->get_available_variations() as $v ) {
-		$out[] = [
-			'id'          => $v['variation_id'],
-			'price_html'  => $v['price_html'],
-			'price'       => $v['display_price'],
-			'sku'         => $v['sku'],
-			'image'       => $v['image']['url'] ?? '',
-			'thumb'       => $v['image']['gallery_thumbnail_src'] ?? ( $v['image']['url'] ?? '' ),
-			'attributes'  => $v['attributes'],
-			'in_stock'    => $v['is_in_stock'],
-			'max_qty'     => $v['max_qty'],
-		];
-	}
-
-	wp_send_json_success( [ 'variations' => $out ] );
-}
-
-// ============================================================
-// AJAX: producten per categorie ophalen
-// ============================================================
-
-add_action( 'wp_ajax_tb_get_products', 'tb_cfg_ajax_products' );
-add_action( 'wp_ajax_nopriv_tb_get_products', 'tb_cfg_ajax_products' );
-function tb_cfg_ajax_products() {
-	check_ajax_referer( 'tb_cfg_nonce', 'nonce' );
-
-	$category    = sanitize_text_field( $_POST['category'] ?? '' );
-	$product_ids = array_map( 'absint', (array) ( $_POST['product_ids'] ?? [] ) );
-
-	$args = [
-		'status' => 'publish',
-		'limit'  => 24,
-		'type'   => [ 'simple', 'variable' ],
-	];
-
-	if ( $category ) {
-		$args['category'] = [ $category ];
-	} elseif ( $product_ids ) {
-		$args['include'] = $product_ids;
-	}
-
-	$products = wc_get_products( $args );
-	$data     = [];
-
-	foreach ( $products as $p ) {
-		$capacity = tb_cfg_get_capacity( $p );
-
-		$item = [
-			'id'           => $p->get_id(),
-			'name'         => $p->get_name(),
-			'type'         => $p->get_type(),
-			'price_html'   => $p->get_price_html(),
-			'image'        => wp_get_attachment_image_url( $p->get_image_id(), 'woocommerce_single' ) ?: wc_placeholder_img_src( 'woocommerce_single' ),
-			'short_desc'   => wp_strip_all_tags( $p->get_short_description() ),
-			'permalink'    => get_permalink( $p->get_id() ),
-			'capacity_kwh' => $capacity,
-			'attributes'   => [],
-		];
-
-		if ( $p->is_type( 'variable' ) ) {
-			foreach ( $p->get_variation_attributes() as $attr_name => $options ) {
-				$item['attributes'][] = [
-					'name'    => 'attribute_' . sanitize_title( $attr_name ),
-					'label'   => wc_attribute_label( $attr_name, $p ),
-					'options' => array_values( array_filter( $options ) ),
-				];
-			}
-		}
-
-		$data[] = $item;
-	}
-
-	wp_send_json_success( [ 'products' => $data ] );
-}
-
-// ============================================================
-// AJAX: in winkelwagen
-// ============================================================
-
-add_action( 'wp_ajax_tb_add_to_cart', 'tb_cfg_ajax_add_to_cart' );
-add_action( 'wp_ajax_nopriv_tb_add_to_cart', 'tb_cfg_ajax_add_to_cart' );
-function tb_cfg_ajax_add_to_cart() {
-	check_ajax_referer( 'tb_cfg_nonce', 'nonce' );
-
-	$product_id   = absint( $_POST['product_id'] ?? 0 );
-	$variation_id = absint( $_POST['variation_id'] ?? 0 );
-	$quantity     = max( 1, absint( $_POST['quantity'] ?? 1 ) );
-	$variation    = [];
-
-	if ( isset( $_POST['variation'] ) && is_array( $_POST['variation'] ) ) {
-		foreach ( $_POST['variation'] as $key => $val ) {
-			$variation[ sanitize_text_field( $key ) ] = sanitize_text_field( $val );
-		}
-	}
-
-	if ( ! $product_id ) {
-		wp_send_json_error( [ 'message' => 'Geen product ID' ] );
-	}
-
-	$result = WC()->cart->add_to_cart( $product_id, $quantity, $variation_id, $variation );
-
-	if ( $result ) {
-		WC()->cart->calculate_totals();
-
-		ob_start();
-		woocommerce_mini_cart();
-		$mini_cart = ob_get_clean();
-
-		wp_send_json_success( [
-			'cart_count' => WC()->cart->get_cart_contents_count(),
-			'cart_url'   => wc_get_cart_url(),
-			'message'    => __( 'Product toegevoegd aan winkelwagen!', 'tb-configurator' ),
-			'mini_cart'  => $mini_cart,
-		] );
-	} else {
-		$notices = wc_get_notices( 'error' );
-		$msg     = ! empty( $notices ) ? wp_strip_all_tags( $notices[0]['notice'] ) : __( 'Kon product niet toevoegen.', 'tb-configurator' );
-		wc_clear_notices();
-		wp_send_json_error( [ 'message' => $msg ] );
-	}
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-function tb_cfg_get_capacity( $product ) {
-	// 1. Product meta _tb_capacity_kwh
-	$cap = (float) $product->get_meta( '_tb_capacity_kwh' );
-	if ( $cap > 0 ) {
-		return $cap;
-	}
-
-	// 2. Attribuut met "capacit" of "kwh" in de naam
-	foreach ( $product->get_attributes() as $attr ) {
-		$slug = strtolower( $attr->get_name() );
-		if ( strpos( $slug, 'capacit' ) !== false || strpos( $slug, 'kwh' ) !== false ) {
-			$terms = $attr->get_terms();
-			if ( $terms ) {
-				preg_match( '/[\d.]+/', $terms[0]->name, $m );
-				if ( $m ) {
-					return (float) $m[0];
-				}
-			}
-		}
-	}
-
-	// 3. Uit productnaam extraheren (bv. "5 kWh" of "10kWh")
-	preg_match( '/(\d+(?:[.,]\d+)?)\s*kwh/i', $product->get_name(), $m );
-	if ( $m ) {
-		return (float) str_replace( ',', '.', $m[1] );
-	}
-
-	return 0;
-}
-
-// ============================================================
-// RENDER: volledige configurator (calculator + producten)
-// ============================================================
-
 function tb_cfg_render_full( $atts ) {
-	$category   = sanitize_text_field( $atts['category'] );
-	$product_id = $atts['product_id'] ? absint( $atts['product_id'] ) : 0;
-	$show_calc  = ( $atts['show_calc'] !== 'no' );
-	?>
-	<div class="tb-full-configurator"
-	     data-category="<?php echo esc_attr( $category ); ?>"
-	     data-product-id="<?php echo esc_attr( $product_id ); ?>">
-
-		<?php if ( $show_calc ) : ?>
-		<div class="tb-calc-section">
-			<?php tb_cfg_render_calculator(); ?>
-		</div>
-		<?php endif; ?>
-
-		<div class="tb-products-section" id="tbProductsSection">
-			<div class="tb-products-header" id="tbProductsHeader" style="display:none">
-				<h2 class="tb-products-title">
-					<?php esc_html_e( 'Aanbevolen producten', 'tb-configurator' ); ?>
-				</h2>
-				<div class="tb-recommend-badge" id="tbRecommendBadge"></div>
-			</div>
-			<div class="tb-loading" id="tbProductsLoading" style="display:none">
-				<div class="tb-spinner"></div>
-				<span><?php esc_html_e( 'Producten laden…', 'tb-configurator' ); ?></span>
-			</div>
-			<div class="tb-products-grid" id="tbProductsGrid"></div>
-		</div>
-
-	</div>
-	<?php
+	// Simplified stub for shortcode use — renders calculator + category grid
+	echo '<p>' . esc_html__( 'Gebruik [tb_product_configurator id="X"] voor een volledig product, of open een productpagina.', 'tb-configurator' ) . '</p>';
 }
 
-// ============================================================
-// RENDER: enkele product configurator (shortcode)
-// ============================================================
-
-function tb_cfg_render_product( $product ) {
-	$pid        = $product->get_id();
-	$is_var     = $product->is_type( 'variable' );
-	$image_url  = wp_get_attachment_image_url( $product->get_image_id(), 'woocommerce_single' ) ?: wc_placeholder_img_src( 'woocommerce_single' );
-	$gallery    = $product->get_gallery_image_ids();
-	$variations = $is_var ? $product->get_available_variations() : [];
-	?>
-	<div class="tb-product-configurator"
-	     data-product-id="<?php echo esc_attr( $pid ); ?>"
-	     data-type="<?php echo esc_attr( $product->get_type() ); ?>">
-
-		<div class="tb-pc-layout">
-
-			<!-- Galerij -->
-			<div class="tb-pc-gallery">
-				<div class="tb-gallery-main">
-					<img id="tbMainImg-<?php echo $pid; ?>"
-					     src="<?php echo esc_url( $image_url ); ?>"
-					     alt="<?php echo esc_attr( $product->get_name() ); ?>"
-					     class="tb-main-img" />
-				</div>
-				<?php if ( $gallery ) : ?>
-				<div class="tb-gallery-thumbs">
-					<div class="tb-thumb tb-thumb-active"
-					     data-full="<?php echo esc_url( $image_url ); ?>">
-						<img src="<?php echo esc_url( wp_get_attachment_image_url( $product->get_image_id(), 'thumbnail' ) ); ?>" alt="" />
-					</div>
-					<?php foreach ( $gallery as $gid ) : ?>
-					<div class="tb-thumb"
-					     data-full="<?php echo esc_url( wp_get_attachment_image_url( $gid, 'woocommerce_single' ) ); ?>">
-						<img src="<?php echo esc_url( wp_get_attachment_image_url( $gid, 'thumbnail' ) ); ?>" alt="" />
-					</div>
-					<?php endforeach; ?>
-				</div>
-				<?php endif; ?>
-			</div>
-
-			<!-- Info en opties -->
-			<div class="tb-pc-info">
-				<h2 class="tb-pc-name"><?php echo esc_html( $product->get_name() ); ?></h2>
-
-				<?php if ( $product->get_short_description() ) : ?>
-				<div class="tb-pc-desc"><?php echo wp_kses_post( $product->get_short_description() ); ?></div>
-				<?php endif; ?>
-
-				<div class="tb-pc-price" id="tbPcPrice-<?php echo $pid; ?>">
-					<?php echo $product->get_price_html(); // phpcs:ignore ?>
-				</div>
-
-				<?php if ( $is_var ) : ?>
-				<div class="tb-variation-selector"
-				     data-product-id="<?php echo esc_attr( $pid ); ?>"
-				     data-variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
-
-					<?php foreach ( $product->get_variation_attributes() as $attr_name => $options ) :
-						$label    = wc_attribute_label( $attr_name, $product );
-						$attr_key = 'attribute_' . sanitize_title( $attr_name );
-					?>
-					<div class="tb-attr-group" data-attr="<?php echo esc_attr( $attr_key ); ?>">
-						<div class="tb-attr-label">
-							<?php echo esc_html( $label ); ?>:
-							<span class="tb-attr-selected"></span>
-						</div>
-						<div class="tb-btn-group" data-attr="<?php echo esc_attr( $attr_key ); ?>">
-							<?php foreach ( $options as $option ) : ?>
-							<button type="button" class="tb-opt-btn"
-							        data-value="<?php echo esc_attr( $option ); ?>"
-							        data-attr="<?php echo esc_attr( $attr_key ); ?>">
-								<?php echo esc_html( $option ); ?>
-							</button>
-							<?php endforeach; ?>
-						</div>
-					</div>
-					<?php endforeach; ?>
-
-					<input type="hidden" class="tb-variation-id" value="" />
-					<div class="tb-availability"></div>
-				</div>
-				<?php endif; ?>
-
-				<!-- Hoeveelheid en winkelwagen -->
-				<div class="tb-cart-row">
-					<div class="tb-qty-wrap">
-						<button type="button" class="tb-qty-btn tb-qty-minus" aria-label="Minder">−</button>
-						<input type="number" class="tb-qty-input" value="1" min="1" max="99" aria-label="Aantal" />
-						<button type="button" class="tb-qty-btn tb-qty-plus" aria-label="Meer">+</button>
-					</div>
-					<button type="button"
-					        class="tb-add-to-cart tb-btn-primary"
-					        data-product-id="<?php echo esc_attr( $pid ); ?>"
-					        <?php echo $is_var ? 'disabled' : ''; ?>>
-						<?php echo $is_var
-							? esc_html__( 'Selecteer opties', 'tb-configurator' )
-							: esc_html__( 'In winkelwagen', 'tb-configurator' ); ?>
-					</button>
-				</div>
-
-				<div class="tb-cart-notice" aria-live="polite" style="display:none"></div>
-
-				<?php if ( $product->get_sku() ) : ?>
-				<div class="tb-pc-sku">
-					SKU: <span id="tbPcSku-<?php echo $pid; ?>"><?php echo esc_html( $product->get_sku() ); ?></span>
-				</div>
-				<?php endif; ?>
-			</div>
-		</div>
-
-	</div>
-	<?php
-}
-
-// ============================================================
-// RENDER: calculator widget
-// ============================================================
-
-function tb_cfg_render_calculator() {
-	?>
-	<div class="tb-calc-wrap">
-
-		<div class="tb-calc-header">
-			<div class="tb-calc-brand">
-				<div class="tb-calc-logo" aria-hidden="true"></div>
-				<div>
-					<h2 class="tb-calc-title"><?php esc_html_e( 'Thuisbatterij Configurator', 'tb-configurator' ); ?></h2>
-					<div class="tb-calc-sub"><?php esc_html_e( 'Vul je jaarverbruik en -teruglevering in.', 'tb-configurator' ); ?></div>
-				</div>
-			</div>
-
-			<div class="tb-contract-toggle" id="tbContractToggle"
-			     role="switch" aria-checked="false" tabindex="0"
-			     title="<?php esc_attr_e( 'Vast of Dynamisch contract', 'tb-configurator' ); ?>">
-				<span class="tb-toggle-lbl" id="tbContractLabel"><?php esc_html_e( 'Vast', 'tb-configurator' ); ?></span>
-				<div class="tb-toggle-track"><div class="tb-toggle-thumb"></div></div>
-				<span class="tb-toggle-lbl"><?php esc_html_e( 'Dynamisch', 'tb-configurator' ); ?></span>
-			</div>
-		</div>
-
-		<div class="tb-calc-grid">
-
-			<!-- Invoer -->
-			<div class="tb-calc-card" id="tbCalcInputCard">
-				<div class="tb-section-label"><?php esc_html_e( '1 · Invoer', 'tb-configurator' ); ?></div>
-
-				<div class="tb-form-row">
-					<div class="tb-field">
-						<label class="tb-lbl" for="tbImportYear"><?php esc_html_e( 'Verbruik uit het net (kWh/jaar)', 'tb-configurator' ); ?></label>
-						<input id="tbImportYear" class="tb-input" type="number" min="0" step="1" value="2500" />
-						<div class="tb-hint"><?php esc_html_e( 'Totale afname van het net per jaar.', 'tb-configurator' ); ?></div>
-					</div>
-					<div class="tb-field">
-						<label class="tb-lbl" for="tbExportYear"><?php esc_html_e( 'Teruglevering (kWh/jaar)', 'tb-configurator' ); ?></label>
-						<input id="tbExportYear" class="tb-input" type="number" min="0" step="1" value="2500" />
-						<div class="tb-hint"><?php esc_html_e( 'Hoeveel zonnestroom je teruglevert aan het net.', 'tb-configurator' ); ?></div>
-					</div>
-				</div>
-
-				<div class="tb-slider-field">
-					<label class="tb-lbl" for="tbBatterySlider"><?php esc_html_e( 'Batterijcapaciteit (kWh)', 'tb-configurator' ); ?></label>
-					<div class="tb-slider-row">
-						<input id="tbBatterySlider" type="range" min="1" max="40" step="0.5" value="5" />
-						<input id="tbBatteryNum" class="tb-input tb-input-sm" type="number" min="0" step="0.5" value="5" />
-					</div>
-					<div class="tb-hint"><?php esc_html_e( 'Gebruik de schuif of "Uitgebreide instellingen".', 'tb-configurator' ); ?></div>
-				</div>
-
-				<!-- Uitgebreide instellingen -->
-				<div class="tb-advanced-fields" id="tbAdvFields">
-					<div class="tb-form-row" style="margin-top:12px">
-						<div class="tb-field">
-							<label class="tb-lbl" for="tbImportPrice"><?php esc_html_e( 'Stroomprijs (€/kWh)', 'tb-configurator' ); ?></label>
-							<input id="tbImportPrice" class="tb-input" type="number" min="0" step="0.01" value="0.30" />
-						</div>
-						<div class="tb-field">
-							<label class="tb-lbl" for="tbExportWithNet"><?php esc_html_e( 'Teruglevertarief met salderen', 'tb-configurator' ); ?></label>
-							<input id="tbExportWithNet" class="tb-input" type="number" min="0" step="0.01" value="0.12" />
-							<div class="tb-hint"><?php esc_html_e( 'Gem. ~€0,12/kWh', 'tb-configurator' ); ?></div>
-						</div>
-					</div>
-					<div class="tb-form-row" style="margin-top:10px">
-						<div class="tb-field">
-							<label class="tb-lbl" for="tbExportPostNet"><?php esc_html_e( 'Teruglevertarief na salderen', 'tb-configurator' ); ?></label>
-							<input id="tbExportPostNet" class="tb-input" type="number" min="0" step="0.01" value="0.04" />
-							<div class="tb-hint"><?php esc_html_e( 'Gem. ~€0,04/kWh', 'tb-configurator' ); ?></div>
-						</div>
-						<div class="tb-field">
-							<label class="tb-lbl"><?php esc_html_e( 'Rendement batterij (round-trip)', 'tb-configurator' ); ?></label>
-							<div class="tb-slider-row">
-								<input id="tbEfficiency" type="range" min="60" max="98" step="1" value="80" />
-								<span id="tbEffLbl" class="tb-suffix">80%</span>
-							</div>
-						</div>
-					</div>
-					<div class="tb-form-row" style="margin-top:10px">
-						<div class="tb-field">
-							<label class="tb-lbl"><?php esc_html_e( 'Max. cycli per dag', 'tb-configurator' ); ?></label>
-							<div class="tb-slider-row">
-								<input id="tbCycles" type="range" min="0.5" max="1.3" step="0.1" value="1" />
-								<span id="tbCyclesLbl" class="tb-suffix">1,0×</span>
-							</div>
-						</div>
-						<div class="tb-field" id="tbSpreadField" style="display:none">
-							<label class="tb-lbl" for="tbPriceSpread"><?php esc_html_e( 'Gem. prijsverschil (€/kWh)', 'tb-configurator' ); ?></label>
-							<input id="tbPriceSpread" class="tb-input" type="number" min="0" step="0.01" value="0.12" />
-							<div class="tb-hint"><?php esc_html_e( 'Alleen relevant bij Dynamisch tarief.', 'tb-configurator' ); ?></div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<!-- Resultaat -->
-			<div class="tb-calc-card" id="tbCalcResultCard">
-				<div class="tb-section-label"><?php esc_html_e( '2 · Resultaat', 'tb-configurator' ); ?></div>
-
-				<div class="tb-kpis">
-					<div class="tb-kpi">
-						<div class="tb-kpi-lbl"><?php esc_html_e( 'Aanbevolen capaciteit', 'tb-configurator' ); ?></div>
-						<div class="tb-kpi-val"><span id="tbRecCap">—</span> kWh</div>
-					</div>
-					<div class="tb-kpi">
-						<div class="tb-kpi-lbl"><?php esc_html_e( 'Terugverdientijd (na saldering)', 'tb-configurator' ); ?></div>
-						<div class="tb-kpi-val"><span id="tbPayback">—</span> <?php esc_html_e( 'jaar', 'tb-configurator' ); ?></div>
-					</div>
-					<div class="tb-kpi">
-						<div class="tb-kpi-lbl"><?php esc_html_e( 'Besparing/jr', 'tb-configurator' ); ?> <small>(<?php esc_html_e( 'met salderen', 'tb-configurator' ); ?>)</small></div>
-						<div class="tb-kpi-val">€ <span id="tbSavingsWithNet">—</span></div>
-					</div>
-					<div class="tb-kpi">
-						<div class="tb-kpi-lbl"><?php esc_html_e( 'Besparing/jr', 'tb-configurator' ); ?> <small>(<?php esc_html_e( 'na saldering', 'tb-configurator' ); ?>)</small></div>
-						<div class="tb-kpi-val">€ <span id="tbSavingsNoNet">—</span></div>
-					</div>
-				</div>
-
-				<div class="tb-calc-msg" id="tbCalcMsg" aria-live="polite"></div>
-
-				<div class="tb-calc-actions">
-					<button type="button" class="tb-btn-secondary" id="tbAdvToggle" aria-expanded="false">
-						<?php esc_html_e( 'Uitgebreide instellingen', 'tb-configurator' ); ?>
-					</button>
-					<button type="button" class="tb-btn-secondary" id="tbCalcReset">
-						<?php esc_html_e( 'Reset', 'tb-configurator' ); ?>
-					</button>
-				</div>
-
-				<div class="tb-rec-cta" id="tbRecCta" style="display:none">
-					<div class="tb-rec-text"><?php esc_html_e( 'Op basis van jouw situatie bevelen wij aan:', 'tb-configurator' ); ?></div>
-					<div class="tb-rec-cap" id="tbRecCapCta"></div>
-					<button type="button" class="tb-btn-primary tb-btn-full" id="tbScrollToProducts">
-						<?php esc_html_e( 'Bekijk aanbevolen producten →', 'tb-configurator' ); ?>
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-	<?php
+function tb_cfg_render_for_product( $product ) {
+	// Temporarily set global product for the render function
+	$backup              = isset( $GLOBALS['product'] ) ? $GLOBALS['product'] : null;
+	$GLOBALS['product']  = $product;
+	tb_cfg_v3_render();
+	$GLOBALS['product']  = $backup;
 }
