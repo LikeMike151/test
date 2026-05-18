@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TB_CFG_VERSION', '3.0.2' );
+define( 'TB_CFG_VERSION', '3.0.3' );
 define( 'TB_CFG_PATH', plugin_dir_path( __FILE__ ) );
 define( 'TB_CFG_URL', plugin_dir_url( __FILE__ ) );
 
@@ -80,6 +80,24 @@ function tb_cfg_enqueue() {
 			'ordering'   => __( 'Bestelling wordt verwerkt…', 'tb-configurator' ),
 		],
 	] );
+
+	// Inject product data here — wp_localize_script runs in <head>, guaranteed before any JS.
+	// This is the ONLY correct place: calling wp_add_inline_script during page content rendering
+	// (e.g. woocommerce_single_product_summary) is too late and corrupts script output.
+	if ( is_product() ) {
+		$_product = wc_get_product( get_the_ID() );
+		if ( $_product && $_product->is_type( 'variable' ) ) {
+			$_pid   = $_product->get_id();
+			$_attrs = $_product->get_variation_attributes();
+			wp_localize_script( 'tb-v3-configurator', 'tbV3Data', [
+				'productId'  => $_pid,
+				'variations' => tb_cfg_build_variations_data( $_product ),
+				'attributes' => tb_cfg_build_attributes_data( $_product ),
+				'upsells'    => tb_cfg_get_upsells( $_pid ),
+				'stackCfg'   => tb_cfg_get_stack_config( $_pid, $_attrs ),
+			] );
+		}
+	}
 }
 
 // Admin: meta box JS/CSS
@@ -127,21 +145,30 @@ function tb_cfg_v3_early_init() {
 	}
 }
 
-// Hook into summary at priority 1 so we can remove WC's add-to-cart (priority 30) before it fires.
-// This works with both classic themes and Elementor's Single Product widget.
+// HOOK STRATEGY:
+// Classic WC themes: woocommerce_single_product_summary fires; we remove WC's add-to-cart at
+//   priority 30 and render ours at priority 25 (before the now-empty slot).
+// Elementor: its "Add To Cart" widget calls woocommerce_template_single_add_to_cart() directly,
+//   bypassing the summary hook. But that function fires woocommerce_before_add_to_cart_form
+//   internally — so we hook there too.
+// static $has_rendered inside tb_cfg_v3_render() prevents double output if both hooks fire.
+
 add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_setup', 1 );
 function tb_cfg_v3_setup() {
 	global $product;
+	if ( ! $product ) {
+		$product = wc_get_product( get_the_ID() );
+	}
 	if ( ! $product || ! $product->is_type( 'variable' ) ) {
 		return;
 	}
-
-	// Remove default WooCommerce variation + add-to-cart before it fires at prio 30
+	// For classic themes: remove WC's form and add ours at priority 25
 	remove_action( 'woocommerce_single_product_summary', 'woocommerce_template_single_add_to_cart', 30 );
-
-	// Add our v3 configurator in its place
-	add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_render', 30 );
+	add_action( 'woocommerce_single_product_summary', 'tb_cfg_v3_render', 25 );
 }
+
+// For Elementor: fires inside the "Add To Cart" widget regardless of the summary hook
+add_action( 'woocommerce_before_add_to_cart_form', 'tb_cfg_v3_render' );
 
 // ============================================================
 // V3: RENDER CONFIGURATOR
@@ -167,29 +194,16 @@ function tb_cfg_v3_render() {
 
 	$pid        = $product->get_id();
 	$attributes = $product->get_variation_attributes();
-	$variations = tb_cfg_build_variations_data( $product );
 	$upsells    = tb_cfg_get_upsells( $pid );
 	$stack_cfg  = tb_cfg_get_stack_config( $pid, $attributes );
 
-	// Inject product data — JSON_HEX_* flags prevent any HTML/quote chars from breaking the JS
-	$json = wp_json_encode(
-		[
-			'productId'  => $pid,
-			'variations' => $variations,
-			'attributes' => tb_cfg_build_attributes_data( $product ),
-			'upsells'    => $upsells,
-			'stackCfg'   => $stack_cfg,
-		],
-		JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-	);
-	wp_print_inline_script_tag( 'var tbV3Data = ' . $json . ';' );
-
-	// Hide the native WC variations form — needed when Elementor renders its own
-	// "Add To Cart" widget which bypasses remove_action on woocommerce_template_single_add_to_cart.
+	// Suppress the native WC variations form — Elementor's "Add To Cart" widget renders it
+	// separately and ignore remove_action, so CSS + JS are the reliable backstop.
 	echo '<style id="tb-hide-wc-form">
 		.variations_form .variations,
 		.variations_form .single_variation_wrap,
-		.variations_form .woocommerce-variation-add-to-cart {
+		.variations_form .woocommerce-variation-add-to-cart,
+		.variations_form .wc-variation-is-unavailable {
 			display: none !important;
 		}
 	</style>' . "\n";
